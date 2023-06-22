@@ -76,10 +76,10 @@ def get_language(note):
 
 def preprocess_code(code):
     if code is None:
-        return ""  # or any default value you prefer
+        return ""  
     elif isinstance(code, str):
-        # Remove any leading/trailing whitespace and convert to uppercase
-        code = code.strip().upper()
+        # Remove any leading/trailing whitespace
+        code = code.strip()
         if code.startswith("U+"):
             # Remove the "U+" prefix if present
             code = code[2:]
