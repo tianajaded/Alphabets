@@ -1,12 +1,13 @@
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageFont, ImageOps
+from PIL import Image
+from PIL import Image, ImageFont, ImageDraw
 import numpy as np
 import pandas as pd
-import os
-import cairosvg
-import io
+import cv2
 
 
 def create_df_unicode():
+    
     """
     Parses unicode names list into pandas dataframe
     Data downloaded from https://www.unicode.org/Public/UCD/latest/ucd/
@@ -25,10 +26,19 @@ def create_df_unicode():
 
     df_unicode = df_unicode[df_unicode.note.apply(
         lambda x: x[0] != '<')].reset_index(drop=True)
-    df_unicode.note.apply(lambda x: x.split()[0]).value_counts().index.tolist()
+    
+    # Define the u function to convert Unicode code to character
+    def u(code):
+        try:
+            return chr(int(code, 16))
+        except:
+            return code
+    
+    # Apply the u function to populate the 'rep' column
     df_unicode['rep'] = df_unicode.code.apply(u)
 
     return df_unicode
+
 
 
 def code_type(code):
@@ -64,58 +74,49 @@ def get_language(note):
     return note.split()[0]
 
 
-def make_picture(code, ttf, canvas_size=500, initial_font_size=60):
-    """
-    Creates a picture of a character given a Unicode code and font.
+def preprocess_code(code):
+    if code is None:
+        return ""  # or any default value you prefer
+    elif isinstance(code, str):
+        # Remove any leading/trailing whitespace and convert to uppercase
+        code = code.strip().upper()
+        if code.startswith("U+"):
+            # Remove the "U+" prefix if present
+            code = code[2:]
+        return code
+    else:
+        return str(code).strip()
 
-    Inputs:
-        code: Hex representation of the Unicode character.
-        ttf: Location of the .ttf file for the font.
-        canvas_size: Size of the output canvas (default: 500).
-        initial_font_size: Initial font size for drawing the symbol (default: 60).
 
-    Returns:
-        picture: 2D NumPy array representing the image.
-    """
+def make_picture(code, ttf, font_size):
     # Create a blank canvas
-    canvas = Image.new('RGB', (canvas_size, canvas_size), (255, 255, 255))
+    canvas_size = 500
+    canvas = np.ones((canvas_size, canvas_size), dtype=np.uint8) * 255
 
     try:
-        font_size = initial_font_size
         font = ImageFont.truetype(ttf, font_size)
     except IOError:
         print(f"Error: Could not load the font file '{ttf}'.")
         return None
 
-    # Calculate the required font size to fit the character within the canvas
-    while True:
-        char_width, char_height = font.getsize(code)
-        if char_width <= canvas_size and char_height <= canvas_size:
-            break
-        font_size -= 5
-        font = ImageFont.truetype(ttf, font_size)
+    # Render character onto the canvas
+    character_image = Image.new('L', (canvas_size, canvas_size), 255)
+    draw = ImageDraw.Draw(character_image)
+    draw.text((0, 0), code, font=font, fill=0)
 
-    # Determine resizing ratio based on the largest dimension of the character image
-    max_dimension = max(char_width, char_height)
-    resize_ratio = canvas_size / max_dimension
-
-    # Resize character image to fit the canvas
-    resized_char_width = int(char_width * resize_ratio)
-    resized_char_height = int(char_height * resize_ratio)
-    resized_char = font.getmask(code).resize(
-        (resized_char_width, resized_char_height))
+    # Resize character image to fit the canvas using OpenCV
+    resized_char = cv2.resize(np.array(
+        character_image), (canvas_size - 20, canvas_size - 20), interpolation=cv2.INTER_LANCZOS4)
 
     # Calculate the position to center the character image on the canvas
-    x = (canvas_size - resized_char_width) // 2
-    y = (canvas_size - resized_char_height) // 2
+    x = (canvas_size - resized_char.shape[1]) // 2
+    y = (canvas_size - resized_char.shape[0]) // 2
 
     # Paste the resized character onto the canvas
-    canvas.paste(resized_char, (x, y))
-
-    # Convert image to grayscale
-    grayscale_canvas = canvas.convert('L')
+    canvas[y:y + resized_char.shape[0], x:x +
+           resized_char.shape[1]] = resized_char
 
     # Normalize pixel values between 0 and 1
-    picture = np.array(grayscale_canvas) / 255.0
+    picture = canvas / 255.0
 
     return picture
