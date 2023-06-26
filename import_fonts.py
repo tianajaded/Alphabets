@@ -22,6 +22,6 @@ destination_folder = '/Users/tiananoll-walker/Documents/bmsis/alphabets_code/alp
 
 # iterate thru the repo directory and copy the fonts to the destination folder
 for filename in os.listdir(repo_path):
-    if filename.endswith('.ttf') and filename[:-4] not in font_list:
+    if filename.endswith(('.ttf', '.otf')) and filename[:-4] in font_list:
         font_file = os.path.join(repo_path, filename)
         shutil.copy(font_file, destination_folder)
